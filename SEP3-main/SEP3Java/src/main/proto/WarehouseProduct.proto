@@ -1,0 +1,49 @@
+﻿syntax = "proto3";
+option csharp_namespace = "gRPC";
+
+import "Product.proto";
+import "Warehouse.proto";
+
+package grpc;
+
+message WarehouseProductResponse
+{
+  ProductResponse product = 1;
+  WarehouseResponse warehouse = 2;
+  int32 quantity = 3;
+  int32 minimumQuantity = 4;
+  string WarehousePosition = 5;
+}
+
+message CreateWarehouseProductRequest {
+  int64 ProductId = 1;
+  int64 WarehouseId = 2;
+  int32 Quantity = 3;
+  int32 minimumQuantity = 4;
+  string WarehousePosition = 5;
+}
+  
+message GetWarehouseProductRequest
+{
+  int64 ProductId = 1;
+  int64 WarehouseId = 2;
+}
+message GetWarehouseProductsRequest {}
+
+message GetWarehouseProductsResponse
+{
+  repeated WarehouseProductResponse warehouseProducts = 1;
+}
+
+message QueryByPartialIdRequest {
+  int64 id = 1;
+}
+
+service WarehouseProductGrpcService{
+  rpc CreateWarehouseProduct(CreateWarehouseProductRequest) returns (WarehouseProductResponse);
+  rpc AlterWarehouseProduct(CreateWarehouseProductRequest) returns (WarehouseProductResponse);
+  rpc GetWarehouseProduct(GetWarehouseProductRequest) returns (WarehouseProductResponse);
+  rpc GetWarehouseProducts(GetWarehouseProductsRequest) returns (GetWarehouseProductsResponse);
+  rpc GetWarehouseProductByProductId(QueryByPartialIdRequest) returns (GetWarehouseProductsResponse);
+  rpc GetWarehouseProductByWarehouseId(QueryByPartialIdRequest) returns (GetWarehouseProductsResponse);
+}

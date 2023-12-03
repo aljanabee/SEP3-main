@@ -1,0 +1,77 @@
+﻿@page "/Orders"
+@using BlazorClient.Util;
+@using Radzen
+@using HttpClients.ClientIntefaces
+@using global::Shared.Models
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IOrderService OrderService
+@inject IWarehouseService WarehouseService
+@inject INotifierService NotifierService
+@inject NavigationManager NavMgr
+@attribute [Authorize]
+
+<PageTitle>Orders</PageTitle>
+
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <RadzenCard>
+                <RadzenText TextStyle="TextStyle.H6">Orders</RadzenText>
+                <AuthorizeView Policy="MustBeSysAdmin">
+                    <RadzenDropDown Style="width:300px" TValue="Warehouse" Placeholder="Select Warehouse" Data="@_warehouses" Change=@(() => GetOrders(_selectedWarehouse.Id)) TextProperty="Name" class="mb-2" @bind-Value=@_selectedWarehouse />
+                </AuthorizeView>
+                <RadzenDataGrid FilterMode="FilterMode.Simple" AllowFiltering="true" AllowPaging="true" AllowSorting="true" TItem="Order" Data="_orders">
+                    <Columns>
+                        <RadzenDataGridColumn TItem="Order" Property="Id" Title="Id" Width="75px" TextAlign="TextAlign.Center" />
+                        <RadzenDataGridColumn TItem="Order" Property="Order.Customer.FullName" Title="Customer" Width="450px" TextAlign="TextAlign.Center"  />
+                        <RadzenDataGridColumn TItem="Order" Property="Order.DateTimeOrdered" Title="Ordered Date" TextAlign="TextAlign.Center"  />
+                        <RadzenDataGridColumn TItem="Order" Property="Order.DateTimeSent" Title="Sent Date" TextAlign="TextAlign.Center"  />
+                        <RadzenDataGridColumn TItem="Order" Property="IsPacked" Title="Packed?" Width="100px" TextAlign="TextAlign.Center">
+                            <Template Context="order">
+                                <RadzenCheckBox TValue="bool" Value="order.IsPacked" />
+                            </Template>
+                        </RadzenDataGridColumn>
+                        <RadzenDataGridColumn TItem="Order" Sortable="false" Title="Action" Width="200px" TextAlign="TextAlign.Center">
+                            <Template Context="order">
+                                <RadzenButton Text="Open Order" ButtonStyle="ButtonStyle.Success" Click=@(() => NavMgr.NavigateTo($"/order/{order.Id}")) />
+                            </Template>
+                        </RadzenDataGridColumn>
+                    </Columns>
+                </RadzenDataGrid>
+            </RadzenCard>
+        </div>
+    </div>
+</div>
+
+@code 
+{
+    private IEnumerable<Order> _orders = null!;
+    private IEnumerable<Warehouse> _warehouses = null!;
+
+    private Warehouse _selectedWarehouse = null!;
+
+    private AuthenticationState _state = null!;
+    protected override async Task OnInitializedAsync() {
+        try {
+            _warehouses = await WarehouseService.GetWarehousesAsync();
+            _state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (_state.User.Identity != null && _state.User.Identity.IsAuthenticated) {
+                _selectedWarehouse = _warehouses.First(w => w.Id.ToString().Equals(_state.User.Claims.First(c => c.Type.Equals("Warehouse")).Value));
+                await GetOrders(_selectedWarehouse.Id);
+            }
+        }
+        catch (Exception e) {
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+
+    private async Task GetOrders(long id) {
+        try {
+            _orders = await OrderService.GetOrdersByWarehouseIdAsync(id);
+        }
+        catch (Exception e) {
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+
+}

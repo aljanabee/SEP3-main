@@ -1,0 +1,33 @@
+﻿/.vs
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+[Tt]arget/
+[Oo]ut/
+
+# C# Ignores:
+/SEP3CSharp/.vs
+/SEP3CSharp/.idea
+
+
+# Java ignores:
+/SEP3Java/.idea/runConfigurations.xml
+/SEP3Java/.idea/libraries
+/SEP3Java/.idea/workspace.xml
+/SEP3Java/.idea/usage.statistics.xml
+/SEP3Java/.idea/shelf
+/SEP3Java/.idea/modules.xml

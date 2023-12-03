@@ -1,0 +1,115 @@
+﻿@page "/Order/{OrderId:long}"
+@using BlazorClient.Util;
+@using HttpClients.ClientIntefaces;
+@using Radzen
+@using global::Shared.Models
+@inject IOrderService OrderService
+@inject INotifierService NotifierService
+@attribute [Authorize]
+<PageTitle>Order</PageTitle>
+
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <RadzenCard>
+                <RadzenText TextStyle="TextStyle.H4">Order: @OrderId</RadzenText>
+                @if (_order != null) {
+                    <RadzenText TextStyle="TextStyle.H6" class="mb-0">Customer: @_order.Customer.FullName</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Body1">Ordered Date/Time: @(_order.DateTimeOrdered == null ? "N/A" : _order.DateTimeOrdered?.ToString("dd/MM/yyyy HH:mm"))</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Body1" class="mb-2">Sent Date/Time: @(_order.DateTimeSent == null ? "N/A" : _order.DateTimeSent?.ToString("dd/MM/yyyy HH:mm"))</RadzenText>
+                    <RadzenText TextStyle="TextStyle.H6" Text="Products" />
+                    <RadzenDataGrid FilterMode="FilterMode.Simple" AllowFiltering="true" AllowPaging="true" AllowSorting="true" TItem="ProductExtension" Data="_products" class="mb-2">
+                        <Columns>
+                            <RadzenDataGridColumn TItem="ProductExtension" Property="Id" Title="Id" Width="75px" TextAlign="TextAlign.Center"  />
+                            <RadzenDataGridColumn TItem="ProductExtension" Property="Name" Title="Name" Width="450px" TextAlign="TextAlign.Center"  />
+                            <RadzenDataGridColumn TItem="ProductExtension" Property="Description" Title="Description" TextAlign="TextAlign.Center"  />
+                                <RadzenDataGridColumn TItem="ProductExtension" Filterable="false" Sortable="false" Property="Price" Title="Price" TextAlign="TextAlign.Center"  />
+                                <RadzenDataGridColumn TItem="ProductExtension" Filterable="false" Sortable="false" Property="Amount" Title="Amount" TextAlign="TextAlign.Center"  />
+                            @if (!_order.IsPacked) {
+                                <AuthorizeView Roles="Warehouse,Manager,SysAdmin" >
+                                    <RadzenDataGridColumn TItem="ProductExtension" Filterable="false" Sortable="false" Title="Mark as Packaged" Width="200px" TextAlign="TextAlign.Center">
+                                        <Template Context="product">
+                                            <RadzenCheckBox TValue="bool" @bind-Value="product.IsPackaged" />
+                                        </Template>
+                                    </RadzenDataGridColumn>
+                                </AuthorizeView>
+                            }
+                        </Columns>
+                    </RadzenDataGrid>   
+                    @if (!_order.IsPacked) {
+                        <AuthorizeView Roles="Warehouse,Manager,SysAdmin">
+                            <RadzenButton Text="Mark Order as Packaged" Disabled="@(_products.Any(p => !p.IsPackaged))" Click="@MarkOrderAsPackaged"/>
+                        </AuthorizeView>
+                    }
+                    else if (_order.DateTimeSent == null) {
+                        <RadzenButton Text="Mark Order as Sent" Click="@MarkOrderAsSent"/>
+                    }
+                }
+            </RadzenCard>
+        </div>
+    </div>
+</div>
+
+
+@code {
+
+    [Parameter]
+    public long OrderId { get; set; }
+
+    private class ProductExtension : Product {
+        public bool IsPackaged { get; set; }
+        public int Amount { get; set; } = 1;
+    }
+
+    private Order _order = null!;
+    private List<ProductExtension> _products = new();
+
+    protected override async Task OnInitializedAsync() {
+        try {
+            _order = await OrderService.GetOrderByIdAsync(OrderId);
+            foreach (Product product in _order.OrderedProducts) {
+                ProductExtension? pe = _products.FirstOrDefault(p => p.Id == product.Id);
+                if (pe != null) {
+                    pe.Amount++;
+                }
+                else {
+                    _products.Add(new ProductExtension() {
+                        Id = product.Id,
+                        Name = product.Name,
+                        Description = product.Description,
+                        Price = product.Price,
+                        IsPackaged = false
+                    });                    
+                }
+            }
+        }
+        catch (Exception e) {
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+
+    private async Task MarkOrderAsPackaged() {
+        _order.IsPacked = true;
+        try {
+            await OrderService.UpdateOrderAsync(_order);
+            NotifierService.NotifySuccess($"Order {_order.Id} was marked as packaged", duration:6000);     
+        }
+        catch (Exception e) {
+            _order.IsPacked = false;
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+
+    private async Task MarkOrderAsSent() {
+        _order.DateTimeSent = DateTime.Now;
+        try {
+            await OrderService.UpdateOrderAsync(_order);
+            NotifierService.NotifySuccess($"Order {_order.Id} was marked as sent at {_order.DateTimeSent?.ToString("dd/MM/yyyy HH:mm")}", duration: 10000);
+        }
+        catch (Exception e) {
+            _order.DateTimeSent = null;
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+
+}

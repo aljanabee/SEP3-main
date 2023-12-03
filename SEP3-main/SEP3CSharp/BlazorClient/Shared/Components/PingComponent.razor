@@ -1,0 +1,40 @@
+﻿@using System.Text.Json
+@using BlazorClient.Util
+@using HttpClients.ClientInterfaces
+@using Radzen
+@inject IPingService PingService
+@inject INotifierService NotifierService
+
+<p style="margin: 0 1em 0 0" class="text-white">@_ping ms 
+    <RadzenButton
+        Style="transform: scale(0.8)"
+        ButtonStyle="ButtonStyle.Success"
+        Size="ButtonSize.ExtraSmall"
+        class="rz-border-radius-10 rz-shadow-4"
+        Click="CheckPing"/>
+</p>
+
+@code {
+    private long _fromTime = 0;
+    private long _serverTime = 0;
+    private long _ping = 0;
+
+    private async void CheckPing()
+    {
+        try {
+            long[]? dateTimes = await PingService.PingAsync();
+
+            if (dateTimes != null && dateTimes.Length > 0)
+            {
+                _fromTime = dateTimes[0];
+                _serverTime = dateTimes[1];
+                _ping = DateTimeOffset.Now.ToUnixTimeMilliseconds() - _fromTime;
+                StateHasChanged();
+            }
+        }
+        catch (Exception e) {
+            Console.WriteLine(e);
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+}

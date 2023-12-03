@@ -1,0 +1,65 @@
+﻿<nav class="navbar navbar-expand-md navbar-dark bg-dark">
+    <div class="container-fluid">
+        @*<a class="navbar-brand" href=""><img src="img/reddit-logo.png" width="40"/><span style="vertical-align: middle"> Freddit</span></a>*@
+        <button class="navbar-toggler" @onclick="@(() => _showNavbar = !_showNavbar)">
+            <RadzenIcon Icon="menu" />
+        </button>
+       
+        <div class="collapse navbar-collapse @((_showNavbar)? "show" : "")" id="navbarSupportedContent">
+            <ul class="navbar-nav me-auto mb-2 mb-md-0">
+                <li class="nav-item">
+                    <NavLink href="" Match="NavLinkMatch.All" class="nav-link">
+                        Home
+                    </NavLink>
+                </li>
+                <AuthorizeView Roles = "Manager,SysAdmin">
+                    <li class="nav-item">
+                        <NavLink href="Products" class="nav-link">
+                            Products
+                        </NavLink>
+                    </li>
+                </AuthorizeView>
+                <AuthorizeView Roles = "Manager,Warehouse,SysAdmin">
+                    <li class="nav-item">
+                        <NavLink href="Inventory" class="nav-link">
+                            Inventory
+                        </NavLink>
+                    </li>
+                </AuthorizeView>
+                <AuthorizeView Roles = "Cashier,Manager,SysAdmin">
+                    <li class="nav-item">
+                        <NavLink href="Customers" class="nav-link">
+                            Customers
+                        </NavLink>
+                    </li>
+                </AuthorizeView>
+                <AuthorizeView>
+                    <li>
+                        <NavLink href="orders" class="nav-link">
+                            Orders
+                        </NavLink>
+                    </li>
+                </AuthorizeView>
+            </ul>
+            <AuthorizeView>
+                <Authorized>
+                    <div>
+                        <label style="color: Gold; margin-top: auto; align-items: center; margin-right: 20px">
+                            Current user @context.User.Identity?.Name
+                        </label>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
+            
+            <PingComponent />
+            <Login.LoginButtons />
+        </div>
+    </div>
+</nav>
+
+@code {
+    //label
+    String currentUser = "420";
+    
+    bool _showNavbar = false;
+}

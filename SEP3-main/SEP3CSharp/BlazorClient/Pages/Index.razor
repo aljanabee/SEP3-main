@@ -1,0 +1,41 @@
+﻿@page "/"
+@using Radzen
+@inject NavigationManager NavMgr
+<PageTitle>Index</PageTitle>
+
+<div>
+    <div class="container">
+        <div class="row">
+            <RadzenCard class="d-flex justify-content-around">
+                <AuthorizeView>
+                    <NotAuthorized>
+                        <RadzenText class="w-100 text-center" TextStyle="TextStyle.H5" Text="Please login"/>
+                    </NotAuthorized>
+                </AuthorizeView>
+                <AuthorizeView Roles="Manager,SysAdmin">
+                    <RadzenButton Size="ButtonSize.Large" class="h4" Text="Product" Click="@(() => NavMgr.NavigateTo("Products"))"/>
+                </AuthorizeView>
+                <AuthorizeView Roles="Manager,Warehouse,SysAdmin">
+                    <RadzenButton Size="ButtonSize.Large" class="h4" Text="Inventory" Click="@(() => NavMgr.NavigateTo("Inventory"))"/>
+                </AuthorizeView>
+                <AuthorizeView Roles="Cashier,Manager,SysAdmin">
+                    <RadzenButton Size="ButtonSize.Large" class="h4" Text="Customers" Click="@(() => NavMgr.NavigateTo("Customers"))"/>
+                </AuthorizeView>
+                <AuthorizeView>
+                    <RadzenButton Size="ButtonSize.Large" class="h4" Text="Orders" Click="@(() => NavMgr.NavigateTo("Orders"))"/>
+                </AuthorizeView>
+            </RadzenCard>
+        </div>
+        <RadzenCard class="row mt-4 p-5 w-50">
+            <RadzenText TextStyle="TextStyle.H3" Text="Users"/>
+            <RadzenText Text="username: bob, password: bobson4, role: Manager"/>
+            <RadzenText Text="username: steve, password: stevesteve3, role: Cashier"/>
+            <RadzenText Text="username: ware, password: warehouse2, role: Warehouse"/>
+            <RadzenText Text="username: anders, password: adminpower5, role: SysAdmin"/>
+        </RadzenCard>
+    </div>
+</div>
+
+
+@code {
+}

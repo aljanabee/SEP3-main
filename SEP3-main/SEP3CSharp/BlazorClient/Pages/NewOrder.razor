@@ -1,0 +1,210 @@
+﻿@page "/orders/new/{CustomerId:long}"
+@using global::Shared.Models
+@using Radzen
+@using global::Shared.Dtos
+@using HttpClients.ClientIntefaces
+@using BlazorClient.Util
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavMgr
+@inject INotifierService NotifierService
+@inject ICustomerService CustomerService
+@inject IWarehouseProductService WarehouseProductService
+@inject IOrderService OrderService
+@attribute [Authorize(Roles = "Cashier,Manager,SysAdmin")]
+<PageTitle>New Order</PageTitle>
+
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <RadzenCard>
+                <RadzenText TextStyle="TextStyle.H4">Create Order</RadzenText>
+                @if (_products != null) {
+                    <RadzenText TextStyle="TextStyle.H6">Customer: @_customer.FullName</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Subtitle1" Text="Add Product from Id:"/>
+                    <div class="d-grid mt-1 mb-1" style="grid-template-columns: repeat(3,150px)">
+                        <RadzenText class="mb-0" Text="Product id" TextStyle="TextStyle.Overline"/>
+                        <RadzenText class="mb-0" Text="Amount" TextStyle="TextStyle.Overline"/>
+                        <RadzenText class="mb-0" Text="Confirm" TextStyle="TextStyle.Overline"/>
+                        <RadzenNumeric TValue="long" Min="1" @bind-Value="_directProductId"/>
+                        <RadzenNumeric TValue="int" Min="1" @bind-Value="_amount"/>
+                        <RadzenButton Text="Confirm" Click="AddDirectlyToOrder"></RadzenButton>
+                    </div>
+                    <RadzenText TextStyle="TextStyle.H6" Text="Products"/>
+                    <RadzenDataGrid @ref="_grid" FilterMode="FilterMode.Simple" AllowFiltering="true" AllowPaging="true" AllowSorting="true" TItem="ProductWrapper" Data="_products" class="mb-2">
+                        <Columns>
+                            <RadzenDataGridColumn TItem="ProductWrapper" Property="Id" Title="Id" Width="75px" TextAlign="TextAlign.Center"/>
+                            <RadzenDataGridColumn TItem="ProductWrapper" Property="Name" Title="Name" Width="450px" TextAlign="TextAlign.Center"/>
+                            <RadzenDataGridColumn TItem="ProductWrapper" Property="Description" Title="Description" Width="100px" TextAlign="TextAlign.Center"/>
+                            <RadzenDataGridColumn TItem="ProductWrapper" Property="Price" Title="Price" Width="100px" TextAlign="TextAlign.Center"/>
+                            <RadzenDataGridColumn TItem="ProductWrapper" Title="Amount" Width="100px" TextAlign="TextAlign.Center" Filterable="false" Sortable="false" >
+                                <Template Context="product">
+                                    <RadzenNumeric TValue="int" Min="1" Max="product.Max" @bind-Value="product.Amount" />
+                                </Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="ProductWrapper" Width="36px" TextAlign="TextAlign.Center" Filterable="false" Sortable="false">
+                                <Template Context="product">
+                                    <RadzenButton ButtonStyle="ButtonStyle.Danger" Icon="delete" Click="@(async () => { _products.Remove(product); await _grid.Reload();})"/>
+                                </Template>
+                            </RadzenDataGridColumn>
+                        </Columns>
+                    </RadzenDataGrid>
+                    <RadzenButton Text="Place Order" Disabled="@(_products.Count < 1)" Click="CreateNewOrder"></RadzenButton>
+                }
+            </RadzenCard>
+        </div>
+    </div>
+</div>
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <RadzenPanel Collapsed="true" AllowCollapse="true" Style="margin: 40px auto;">
+                <HeaderTemplate>
+                    <h4 class="m-0 d-flex align-items-center">
+                        <RadzenIcon Icon="view_list" Style="transform: scale(1.5)" class="me-1 user-select-none"/><b>Warehouse Products</b>
+                    </h4>
+                </HeaderTemplate>
+                <ChildContent>
+                    <div class="m-2">
+                        <RadzenDataGrid TItem="WarehouseProduct" Data="@_warehouseProducts" PageSize="10" AllowPaging="true" AllowFiltering="true" FilterMode="FilterMode.SimpleWithMenu" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@_selectedProduct class="mb-2">
+                            <Columns>
+                                <RadzenDataGridColumn TItem="WarehouseProduct" Property="Product.Id" Title="Product Id" Width="150px" TextAlign="TextAlign.Center"/>
+                                <RadzenDataGridColumn TItem="WarehouseProduct" Property="Product.Name" Title="Name" Width="150px" Sortable="false"/>
+                                <RadzenDataGridColumn TItem="WarehouseProduct" Property="Product.Description" Title="Description" Width="500px" TextAlign="TextAlign.Center" Sortable="false"/>
+                                <RadzenDataGridColumn TItem="WarehouseProduct" Property="Product.Price" Title="Price" Width="100px" TextAlign="TextAlign.Center" Filterable="false"/>
+                                <RadzenDataGridColumn TItem="WarehouseProduct" Property="Quantity" Title="Stock" Width="100px" TextAlign="TextAlign.Center" Filterable="false"/>
+                            </Columns>
+                        </RadzenDataGrid>
+                        <RadzenNumeric TValue="int" Min="1" @bind-Value="_amount"></RadzenNumeric>
+                        <RadzenButton Text="Add to Order" Disabled="@(_selectedProduct == null || _selectedProduct.Count != 1)" Click="AddToOrder"/>
+                    </div>
+                </ChildContent>
+            </RadzenPanel>
+        </div>
+    </div>
+</div>
+
+
+@code {
+    [Parameter]
+    public long CustomerId { get; set; }
+
+    private OrderCreationDto _order = null!;
+    private Customer _customer = null!;
+    
+    private AuthenticationState _state = null!;
+
+    private int _amount = 1;
+    private long _directProductId = 1;
+    
+    private class ProductWrapper : Product {
+        public int Amount { get; set; }
+        
+        public int Max { get; }
+
+        public ProductWrapper(Product product, int amount, int max) {
+            Id = product.Id;
+            Name = product.Name;
+            Description = product.Description;
+            Price = product.Price;
+            Amount = amount;
+            Max = max;
+        }
+    }
+
+    RadzenDataGrid<ProductWrapper>? _grid;
+
+    private IList<ProductWrapper> _products = null!;
+
+    private IList<WarehouseProduct> _selectedProduct = null!;
+    private IEnumerable<WarehouseProduct> _warehouseProducts = null!;
+
+    protected override async Task OnInitializedAsync() {
+        try {
+            _state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            _order = new OrderCreationDto ();
+            if (_state.User.Identity != null && _state.User.Identity.IsAuthenticated) {
+                _order.WarehouseId = long.Parse(_state.User.Claims.First(c => c.Type.Equals("Warehouse")).Value);
+            }
+            _customer = await CustomerService.GetCustomerByIdAsync(CustomerId);
+            _order.CustomerId = _customer.Id;
+            _warehouseProducts = await WarehouseProductService.GetWarehouseProductsByWarehouseAsync(_order.WarehouseId);
+            _products = new List<ProductWrapper>();
+        }
+        catch (Exception e) {
+            Console.WriteLine(e);
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+
+    private async Task AddDirectlyToOrder() {
+        try {
+            WarehouseProduct warehouseProduct = _warehouseProducts.First(p => p.Product.Id == _directProductId);
+            if ( _products.Any(wrapper => wrapper.Id == warehouseProduct.Product.Id)
+            && _products.First(wrapper => wrapper.Id == warehouseProduct.Product.Id).Amount + _amount > warehouseProduct.Quantity
+                || _amount > warehouseProduct.Quantity) {
+                throw new Exception("Cannot add more than is in stock");
+            }
+            if (_products.Any(wrapper => wrapper.Id == warehouseProduct.Product.Id)) {
+                _products.First(wrapper => wrapper.Id == warehouseProduct.Product.Id).Amount += _amount;
+            }
+            else {
+                _products.Add(new ProductWrapper(warehouseProduct.Product, _amount, warehouseProduct.Quantity));
+            }
+            if (_grid != null) await _grid.Reload();
+            NotifierService.NotifyInfo("Product Added", duration: 4000);
+            _amount = 1;
+        }
+        catch (InvalidOperationException  e) {
+            Console.WriteLine(e);
+            NotifierService.NotifyError($"Product {_directProductId} not available");
+        }
+        catch (Exception e) {
+            NotifierService.NotifyWarning(e.Message, duration: 4000);
+        }
+    }
+    
+    private async Task AddToOrder() {
+        try {
+            
+            WarehouseProduct warehouseProduct = _selectedProduct.First();
+            if (_products.Any(wrapper => wrapper.Id == _selectedProduct.First().Product.Id) 
+                &&_products.First(wrapper => wrapper.Id == _selectedProduct.First().Product.Id).Amount + _amount > warehouseProduct.Quantity
+                || _amount > warehouseProduct.Quantity) {
+                throw new Exception("Cannot add more than is in stock");
+            }
+            if (_products.Any(wrapper => wrapper.Id == _selectedProduct.First().Product.Id)) {
+                _products.First(wrapper => wrapper.Id == _selectedProduct.First().Product.Id).Amount += _amount;
+            }
+            else {
+                _products.Add(new ProductWrapper(_selectedProduct.First().Product, _amount,_selectedProduct.First().Quantity));
+            }
+            if (_grid != null) await _grid.Reload();
+            NotifierService.NotifyInfo("Product Added", duration:4000);
+        }
+        catch (Exception e) {
+            NotifierService.NotifyWarning(e.Message, duration:4000);
+        }
+        _selectedProduct = null!;
+        _amount = 1;
+    }
+
+    private async Task CreateNewOrder() {
+        IList<long> productIdList = new List<long>();
+        foreach (ProductWrapper product in _products) {
+            for (int i = 0; i < product.Amount; i++) {
+                productIdList.Add(product.Id);
+            }
+        }
+        _order.ProductIds = productIdList.AsEnumerable();
+        _order.DateTimeOrdered = DateTime.Now;
+        try {
+            await OrderService.CreateOrderAsync(_order);
+            NavMgr.NavigateTo("/Customers");
+            NotifierService.NotifySuccess("Order placed", duration:4000);
+        }
+        catch (Exception e) {
+            Console.WriteLine(e);
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+}

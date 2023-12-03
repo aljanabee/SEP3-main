@@ -1,0 +1,138 @@
+﻿@page "/Products"
+@using Radzen
+@using HttpClients.ClientIntefaces
+@using global::Shared.Dtos
+@using global::Shared.Models
+@using BlazorClient.Util
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject INotifierService NotifierService
+@inject DialogService DialogService
+@inject IWarehouseProductService WarehouseProductService
+@inject IProductService ProductService
+@inject IWarehouseService WarehouseService
+@inject IWarehousePositionService WarehousePositionService
+@attribute [Authorize(Roles = "Manager,SysAdmin")]
+<PageTitle>Products</PageTitle>
+
+
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <RadzenCard>
+                <RadzenText TextStyle="TextStyle.H6">Products</RadzenText>
+                <AuthorizeView Policy="MustBeSysAdmin">
+                    <RadzenDropDown Style="width:300px" TValue="Warehouse" Placeholder="Select Warehouse" Data="@_warehouses" Change=@(() => GetProducts(_selectedWarehouse.Id)) TextProperty="Name" class="mb-2" @bind-Value=@_selectedWarehouse />
+                </AuthorizeView>
+                <RadzenDataGrid TItem="Product" Data="@_products" PageSize="10" AllowPaging="true" AllowFiltering="true" FilterMode="FilterMode.SimpleWithMenu" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@_selectedProduct class="mb-2">
+                    <Columns>
+                        <RadzenDataGridColumn TItem="Product" Property="Id" Title="Product Id" Width="150px" TextAlign="TextAlign.Center"/>
+                        <RadzenDataGridColumn TItem="Product" Property="Name" Title="Name" Width="150px" Sortable="false" />
+                        <RadzenDataGridColumn TItem="Product" Property="Description" Title="Description" Width="500px" TextAlign="TextAlign.Center" />
+                        <RadzenDataGridColumn TItem="Product" Property="Price" Title="Price" Width="100px" TextAlign="TextAlign.Center" Filterable="false"/>
+                    </Columns>
+                </RadzenDataGrid>
+                <RadzenButton Text="Add to Warehouse" Disabled="@(_selectedProduct == null || _selectedWarehouse == null)" Click="OpenCreationDialog"/>
+            </RadzenCard>
+        </div>
+    </div>
+</div>
+@code 
+{
+    private IEnumerable<Product> _products = null!;
+    private IEnumerable<Warehouse> _warehouses = null!;
+    private IEnumerable<WarehouseProduct> _warehouseProducts = null!;
+    private IEnumerable<WarehousePosition> _warehousePositions = null!;
+    private ICollection<WarehousePosition> _displayWarehousePosition = null!;
+
+    private IList<Product> _selectedProduct = null!;
+    private Warehouse _selectedWarehouse = null!;
+    private int? _quantity = 0;
+    private int? _minQuantity = 0;
+    private string? _position = null;
+    
+    AuthenticationState _state = null!;
+
+    protected override async Task OnInitializedAsync() {
+        try {
+            _warehouses = await WarehouseService.GetWarehousesAsync();
+            _products = await ProductService.GetProductsAsync();
+            _warehousePositions = await WarehousePositionService.GetAsync();
+            _displayWarehousePosition = new List<WarehousePosition>();
+            _state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (_state.User.Identity != null && _state.User.Identity.IsAuthenticated) {
+                foreach (var warehouse in _warehouses) {
+                    if (warehouse.Id + "" == _state.User.Claims.First(c => c.Type == "Warehouse").Value) {
+                        _selectedWarehouse = warehouse;
+                        await GetProducts(warehouse.Id);
+                    }
+                }
+            }
+        }
+        catch (Exception e) {
+                NotifierService.NotifyError(e.Message);
+        }
+    }
+
+    private async Task OpenCreationDialog(){
+        _displayWarehousePosition.Clear();
+        foreach (var warehousePosition in _warehousePositions) {
+            if (_warehouseProducts.All(p => p.WarehousePosition != warehousePosition.Position)) {
+                _displayWarehousePosition.Add(warehousePosition);
+            }
+        }
+        await DialogService.OpenAsync("Add Product to Warehouse", ds =>
+            @<div>
+                <p class="mb-4">Add <b>@_selectedProduct.First().Name</b> to <b>@_selectedWarehouse.Name</b></p>
+                <div class="row">
+                    <div class="col d-flex flex-column">
+                        <RadzenText TextStyle="TextStyle.Overline" Text="Quantity"/>
+                        <RadzenNumeric class="mb-2" Min="0" TValue="int?" @bind-Value=_quantity></RadzenNumeric>
+                        <RadzenText TextStyle="TextStyle.Overline" Text="Minimum Quantity"/>
+                        <RadzenNumeric class="mb-2" Min="0" TValue="int?" @bind-Value=_minQuantity></RadzenNumeric>
+                        <RadzenText TextStyle="TextStyle.Overline" Text="Position"/>
+                        <RadzenDropDown class="mb-2" AllowClear="true" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" TValue="string" @bind-Value=_position 
+                                        Data="_displayWarehousePosition" TextProperty="Position" ValueProperty="Position" Placeholder="Warehouse Position"/>
+                        <RadzenButton Text="Confirm" Click="async () => {await CreateWarehouseProduct(_selectedProduct.First().Id, _selectedWarehouse.Id); ds.Close();}" ButtonStyle="ButtonStyle.Light" Class="me-1"/>
+                    </div>
+                </div>
+        </div>
+    );
+    }
+
+    private async Task GetProducts(long id) {
+        try {
+            _warehouseProducts = await WarehouseProductService.GetWarehouseProductsByWarehouseAsync(id);
+        }
+        catch (Exception e) {
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+
+    private async Task CreateWarehouseProduct(long productId, long warehouseId) {
+        if (_quantity == null || _minQuantity == null || _position == null ) {
+            string missingValues = "";
+            missingValues += _quantity == null ? "Quantity " : "";
+            missingValues += _minQuantity == null ? "Minimum Quantity " : "";
+            missingValues += _position == null ? "Position" : "";
+            NotifierService.NotifyWarning("Please fill in all fields. Missing values: " + missingValues, duration: 4000);
+            return;
+        }
+        try {
+            await WarehouseProductService.CreateWarehouseProductAsync(new WarehouseProductCreationDto {
+                    ProductId = productId,
+                    WarehouseId = warehouseId,
+                    Quantity = _quantity ?? 0,
+                    MinimumQuantity = _minQuantity ?? 0,
+                    WarehousePosition = _position
+                });
+            _quantity = 0;
+            _minQuantity = 0;
+            _position = "";
+            NotifierService.NotifySuccess("Product added to Warehouse", duration: 4000);
+            await GetProducts(warehouseId);
+        }
+        catch (Exception e) {
+                NotifierService.NotifyError(e.Message);
+        }
+    }
+}

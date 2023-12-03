@@ -1,0 +1,17 @@
+syntax = "proto3";
+option csharp_namespace = "gRPC";
+
+package grpc;
+
+message PingRequest {
+  int64 dateTime = 1;
+}
+
+message PingResponse{
+  int64 originDate = 1;
+  int64 returnDate = 2;
+}
+
+service Ping {
+  rpc ping(PingRequest) returns (PingResponse);
+}

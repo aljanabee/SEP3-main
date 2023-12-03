@@ -1,0 +1,60 @@
+﻿@using HttpClients.ClientInterfaces
+@using Radzen
+@using BlazorClient.Util
+@namespace Login
+@inject NavigationManager NavMgr
+@inject IAuthService AuthService
+@inject INotifierService NotifierService
+@inject DialogService DialogService
+
+<AuthorizeView>
+    <Authorized>
+        <RadzenButton Icon="logout" Variant="Variant.Text" ButtonStyle="ButtonStyle.Light" Click="LogoutAsync"></RadzenButton>
+    </Authorized>
+    <NotAuthorized>
+        <RadzenButton Icon="login" Variant="Variant.Text" ButtonStyle="ButtonStyle.Light" Click="OpenSigninDialog"></RadzenButton>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private string _userName = "bob";
+    private string _password = "bobson4";
+
+    private async Task OpenSigninDialog() {
+        await DialogService.OpenAsync("Login", ds =>
+            @<div class="d-flex justify-content-center">
+                <div class="p-3 text-center">
+                    <RadzenText class="mb-3" TextStyle="TextStyle.H4">Please login</RadzenText>
+                    <div class="text-start">
+                        <RadzenText class="mb-0" TextStyle="TextStyle.Overline" TagName="TagName.H3">Username</RadzenText>
+                        <RadzenTextBox Placeholder="Username" Class="mb-3 w-100" @bind-Value="_userName"/>
+                        <RadzenText class="mb-0" TextStyle="TextStyle.Overline" TagName="TagName.H3">Password</RadzenText>
+                        <RadzenPassword Placeholder="Enter password..." Class="w-100" @bind-Value="_password"/>
+                    </div>
+                    <RadzenButton class="mt-2" Click="async () => {await LoginAsync();ds.Close();}" Variant="Variant.Text" Text="Login"/>
+                </div>
+            </div>);
+    }
+
+    private async Task LoginAsync() {
+        try {
+            await AuthService.LoginAsync(_userName, _password);
+            NotifierService.NotifySuccess("Logged in as " + _userName, duration:4000);
+        }
+        catch (Exception e) {
+            Console.WriteLine(e);
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+
+    private async Task LogoutAsync() {
+        try {
+            await AuthService.LogoutAsync();
+            NotifierService.NotifySuccess("Logged out", duration:4000);
+        }
+        catch (Exception e) {
+            Console.WriteLine(e);
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+}

@@ -1,0 +1,62 @@
+﻿syntax = "proto3";
+option csharp_namespace = "gRPC";
+package grpc;
+
+import "Product.proto";
+import "Customer.proto";
+import "Warehouse.proto";
+
+message CreateOrderRequest {
+  int64 customerId = 1;
+  int64 warehouseId = 2;
+  int64 dateTimeOrdered = 3;
+  bool isPacked = 4;
+  int64 dateTimeSent = 5;
+  repeated int64 productIds = 6;
+}
+
+message UpdateOrderRequest {
+  int64 id = 1;
+  int64 customerId = 2;
+  int64 warehouseId = 3;
+  int64 dateTimeOrdered = 4;
+  bool isPacked = 5;
+  int64 dateTimeSent = 6;
+  repeated int64 productIds = 7;
+}
+
+message UpdateOrderResponse {
+  string responseMessage = 1;
+}
+
+message OrderResponse {
+  int64 id = 1;
+  CustomerResponse customer = 2;
+  WarehouseResponse warehouse = 3;
+  int64 dateTimeOrdered = 4;
+  bool isPacked = 5;
+  int64 dateTimeSent = 6;
+  GetProductsResponse products = 7;
+}
+
+message GetOrderRequest {
+  int64 id = 1;
+}
+
+message GetOrdersRequest {}
+
+message GetOrdersByWarehouseIdRequest {
+  int64 id = 1;
+}
+
+message GetOrdersResponse {
+  repeated OrderResponse orders = 1;
+}
+
+service OrderGrpcService {
+  rpc CreateOrder(CreateOrderRequest) returns (OrderResponse);
+  rpc UpdateOrder(UpdateOrderRequest) returns (UpdateOrderResponse);
+  rpc GetOrder(GetOrderRequest) returns (OrderResponse);
+  rpc GetOrders(GetOrdersRequest) returns (GetOrdersResponse);
+  rpc GetOrdersByWarehouseId(GetOrdersByWarehouseIdRequest) returns (GetOrdersResponse);
+}

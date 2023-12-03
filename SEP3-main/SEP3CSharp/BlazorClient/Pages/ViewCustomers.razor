@@ -1,0 +1,237 @@
+﻿@page "/Customers"
+@using global::Shared.Models
+@using Microsoft.AspNetCore.Components
+@using Radzen
+@using BlazorClient.Util
+@using HttpClients.ClientIntefaces
+@using System.Text.RegularExpressions
+@using global::Shared.Dtos
+@inject NavigationManager NavMgr
+@inject INotifierService NotifierService
+@inject DialogService DialogService
+@inject ICustomerService CustomerService
+@attribute [Authorize(Roles = "Cashier,Manager,SysAdmin")]
+<PageTitle>Customers</PageTitle>
+
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <RadzenCard>
+                <RadzenText TextStyle="TextStyle.H6" TagName="TagName.H3">Customers</RadzenText>
+                <RadzenButton class="mb-2" Text="Create Customer" Click="OpenCreationDialog"></RadzenButton>
+                <RadzenDataGrid TItem="Customer" Data="@_customers" PageSize="10" AllowPaging="true" AllowFiltering="true" FilterMode="FilterMode.SimpleWithMenu" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@_selectedCustomer class="mb-2">
+                    <Columns>
+                        <RadzenDataGridColumn TItem="Customer" Property="Id" Title="Customer Id" Width="100px" />
+                        <RadzenDataGridColumn TItem="Customer" Property="FullName" Title="Full Name" Width="150px" />
+                        <RadzenDataGridColumn TItem="Customer" Property="PhoneNo" Title="Phone Number" Width="150px" />
+                        <RadzenDataGridColumn TItem="Customer" Property="Address" Title="Address" Width="150px" Sortable="false"/>
+                        <RadzenDataGridColumn TItem="Customer" Property="Mail" Title="Mail" Width="150px"/>
+                    </Columns>
+                </RadzenDataGrid>
+                <RadzenButton Text="Edit Customer" Disabled="@(_selectedCustomer == null)" Click="OpenAlterDialog"/>
+                <RadzenButton Text="Create Order" Disabled="@(_selectedCustomer == null)" Click=@(() => NavMgr.NavigateTo($"orders/new/{_selectedCustomer.First().Id}"))></RadzenButton>
+            </RadzenCard>
+        </div>
+    </div> 
+</div>
+
+@code {
+    private IEnumerable<Customer> _customers = null!;
+
+    private IList<Customer> _selectedCustomer = null!;
+
+    private string _fullName = "";
+    private string _phoneNo = "";
+    private string _address = "";
+    private string _mail = "";
+
+    private bool _addCustomerIsBusy = false;
+
+    private readonly Regex regex = new Regex(@"^([\w\.\-]+)@([\w\-]+)((\.(\w){2,3})+)$");
+    private readonly Regex regexName = new Regex(@"^[a-åA-Å ]+$");
+
+    protected override async Task OnInitializedAsync() {
+        try {
+            _customers = await CustomerService.GetCustomersAsync();
+        }
+        catch (Exception e) {
+            Console.WriteLine(e);
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+
+    private async Task OpenCreationDialog() {
+        _addCustomerIsBusy = false;
+        _fullName = "";
+        _phoneNo = "";
+        _address = "";
+        _mail = "";
+        await DialogService.OpenAsync("Create Customer", ds => 
+            @<div>
+                <div class="d-flex flex-column p-3">
+                    <div class="row px-3">
+                        <RadzenText TextStyle="TextStyle.Overline" Class="mt-1 mb-0">FullName </RadzenText>
+                        <RadzenTextBox Placeholder="Fullname" Class="w-100" @bind-value="_fullName" />
+                    </div>
+                    <div class="row px-3">
+                        <RadzenText TextStyle="TextStyle.Overline" Class="mt-3 mb-0">Phone </RadzenText>
+                        <RadzenTextBox Placeholder="Phone" Class="w-100" @bind-value="_phoneNo" />
+                    </div>
+                    <div class="row px-3">
+                        <RadzenText TextStyle="TextStyle.Overline" Class="mt-3 mb-0">Addresse </RadzenText>
+                        <RadzenTextBox Placeholder="Address" Class="w-100" @bind-value="_address" />
+                    </div>
+                    <div class="row px-3">
+                        <RadzenText TextStyle="TextStyle.Overline" Class="mt-3 mb-0">Mail </RadzenText>
+                        <RadzenTextBox Placeholder="Mail" Class="w-100" @bind-Value="_mail" />
+                    </div>
+                    <div class="row mb-4">
+                        <div class="col">
+                            <RadzenButton class="mt-3" style="width: 160px" Icon="save" BusyText="Creating ..." IsBusy=@_addCustomerIsBusy Click="async () => await CreateNewCustomerAsync(ds)" Text="Create"/>
+                        </div>
+                    </div>
+                </div>
+        </div>
+    );
+    }
+
+    private async Task CreateNewCustomerAsync(DialogService dialogService)
+    {
+        try {
+            if (!ValidatePhone(_phoneNo) || !ValidateFullName(_fullName) || !ValidateMail(_mail) || !ValidateAddress(_address)) {
+                string missingValues = "";
+                missingValues += !ValidateFullName(_fullName) ? "FullName " : "";
+                missingValues += !ValidatePhone(_phoneNo) ? "PhoneNo " : "";
+                missingValues += !ValidateAddress(_address) ? "Address " : "";
+                missingValues += !ValidateMail(_mail) ? "Mail" : "";
+                NotifierService.NotifyWarning("One or more fields were not validated."
+                + "The following fields contain invalid information: " + missingValues, duration: 8000);
+                return;
+            }
+            _addCustomerIsBusy = true;
+            await CustomerService.CreateCustomerAsync(new CustomerCreationDto(
+                _fullName, _phoneNo, _address, _mail));
+            _fullName = string.Empty;
+            _phoneNo = string.Empty;
+            _address = string.Empty;
+            _mail = string.Empty;
+            _customers = await CustomerService.GetCustomersAsync();
+            NotifierService.NotifySuccess("Customer was created", duration: 4000);
+            dialogService.Close();
+        }
+        catch (Exception e) {
+            Console.WriteLine(e);
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+    
+    private async Task OpenAlterDialog() {
+        _addCustomerIsBusy = false;
+        Customer _selected = _selectedCustomer.First();
+        _fullName = _selected.FullName;
+        _phoneNo = _selected.PhoneNo;
+        _address = _selected.Address;
+        _mail = _selected.Mail;
+        await DialogService.OpenAsync("Edit Customer", ds => 
+            @<div>
+                <div class="d-flex flex-column p-3">
+                    <div class="row px-3">
+                        <RadzenText TextStyle="TextStyle.Overline" Class="mt-1 mb-0">FullName </RadzenText>
+                        <RadzenTextBox Placeholder="Fullname" Class="w-100" @bind-value="_fullName" />
+                    </div>
+                    <div class="row px-3">
+                        <RadzenText TextStyle="TextStyle.Overline" Class="mt-3 mb-0">Phone </RadzenText>
+                        <RadzenTextBox Placeholder="Phone" Class="w-100" @bind-value="_phoneNo" />
+                    </div>
+                    <div class="row px-3">
+                        <RadzenText TextStyle="TextStyle.Overline" Class="mt-3 mb-0">Addresse </RadzenText>
+                        <RadzenTextBox Placeholder="Address" Class="w-100" @bind-value="_address" />
+                    </div>
+                    <div class="row px-3">
+                        <RadzenText TextStyle="TextStyle.Overline" Class="mt-3 mb-0">Mail </RadzenText>
+                        <RadzenTextBox Placeholder="Mail" Class="w-100" @bind-Value="_mail" />
+                    </div>
+                    <div class="row mb-4">
+                        <div class="col">
+                            <RadzenButton class="mt-3" style="width: 160px" Icon="save" Click="async () => await AlterCustomerAsync(ds)" Text="Alter"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            );
+    }
+    
+    private async Task AlterCustomerAsync(DialogService dialogService)
+    {
+        try {
+            if (!ValidatePhone(_phoneNo) || !ValidateFullName(_fullName) || !ValidateMail(_mail) || !ValidateAddress(_address)) {
+                string missingValues = "";
+                missingValues += !ValidateFullName(_fullName) ? "FullName " : "";
+                missingValues += !ValidatePhone(_phoneNo) ? "PhoneNo " : "";
+                missingValues += !ValidateAddress(_address) ? "Address " : "";
+                missingValues += !ValidateMail(_mail) ? "Mail" : "";
+                NotifierService.NotifyWarning("One or more fields were not validated."
+                + "The following fields contain invalid information: " + missingValues, duration: 8000);
+                return;
+            }
+            _addCustomerIsBusy = true;
+            await CustomerService.AlterCustomerAsync(new Customer {
+                Id = _selectedCustomer.First().Id,
+                FullName = _fullName,
+                PhoneNo = _phoneNo,
+                Address = _address,
+                Mail = _mail
+            });
+            _fullName = string.Empty;
+            _phoneNo = string.Empty;
+            _address = string.Empty;
+            _mail = string.Empty;
+            _customers = await CustomerService.GetCustomersAsync();
+            NotifierService.NotifySuccess("Customer was altered", duration:4000);
+            dialogService.Close();
+        }
+        catch (Exception e) {
+            Console.WriteLine(e);
+            NotifierService.NotifyError(e.Message);
+        }
+    }
+
+    public bool ValidateMail(string _mail) {
+        if (regex.IsMatch(_mail)) {
+            return true;
+        }
+        return false;
+    }
+
+    public bool ValidateFullName(string _fullName) {
+        if (!string.IsNullOrWhiteSpace(_fullName)) {
+            if (regexName.IsMatch(_fullName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public bool ValidatePhone(string _phoneNo) {
+        if (String.IsNullOrEmpty(_phoneNo)) {
+            return false;
+        }
+        char[] chars = _phoneNo.ToCharArray();
+        foreach (char c in chars) {
+            if (Char.IsLetter(c)) {
+                return false;
+            }
+            if (chars.Length != 8) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public bool ValidateAddress(string _address) {
+        if (string.IsNullOrWhiteSpace(_address)) {
+            return false;
+        }
+        return true;
+    }
+}
